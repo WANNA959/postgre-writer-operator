@@ -20,7 +20,7 @@ func (st *Student) TableName() string {
 // Insert inserts a row into the DB to which the receiver PostgresDBClient points
 func (student *Student) Insert(st *Student) error {
 	pc := postgre.GetDbConnection()
-	insertQuery := fmt.Sprintf("insert into \"%s\"(id, name, age, department) VALUES(%d, '%s', %d, '%s');", student.TableName(), st.Id, st.Name, st.Age, st.Department)
+	insertQuery := fmt.Sprintf("insert into \"%s\"(id, name, age, department) VALUES(%d, '%s', %d, '%s') ON CONFLICT (id) DO UPDATE SET name='%s',age=%d,department='%s';", student.TableName(), st.Id, st.Name, st.Age, st.Department, st.Name, st.Age, st.Department)
 	if _, err := pc.Exec(insertQuery); err != nil {
 		return err
 	}
@@ -30,7 +30,7 @@ func (student *Student) Insert(st *Student) error {
 // Delete deletes row from the DB to which the receiver PostgresDBClient points
 func (student *Student) Delete(id int64) error {
 	pc := postgre.GetDbConnection()
-	deleteQuery := fmt.Sprintf("DELETE FROM '%s' WHERE id=%d;", student.TableName(), id)
+	deleteQuery := fmt.Sprintf("DELETE FROM \"%s\" WHERE id=%d;", student.TableName(), id)
 	if _, err := pc.Exec(deleteQuery); err != nil {
 		return err
 	}

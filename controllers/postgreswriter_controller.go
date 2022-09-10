@@ -19,17 +19,22 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"reflect"
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+
+	"github.com/WANNA959/postgres-writer-operator/pkg/postgre"
+	"github.com/go-logr/logr"
 
 	dbv1 "github.com/WANNA959/postgres-writer-operator/api/v1"
 	"github.com/WANNA959/postgres-writer-operator/pkg/model"
-	"github.com/WANNA959/postgres-writer-operator/pkg/postgre"
 )
 
 // PostgresWriterReconciler reconciles a PostgresWriter object
@@ -38,6 +43,11 @@ type PostgresWriterReconciler struct {
 	Scheme        *runtime.Scheme
 	PostgreClient *postgre.PostgresDBClient
 }
+
+var (
+	logger     logr.Logger
+	finalizers []string = []string{"finalizers.postgreswriters.demo.yash.com/cleanup-row"}
+)
 
 //+kubebuilder:rbac:groups=db.godx.com,resources=postgreswriters,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=db.godx.com,resources=postgreswriters/status,verbs=get;update;patch
@@ -52,13 +62,14 @@ type PostgresWriterReconciler struct {
 //
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.12.2/pkg/reconcile
-func (r *PostgresWriterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	logger := log.FromContext(ctx)
+func (r *PostgresWriterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (reconcile.Result, error) {
+	logger = log.FromContext(ctx)
 	// TODO(user): your logic here
 
 	// parsing the incoming postgres-writer resource
 	postgreWriterObj := &dbv1.PostgresWriter{}
 	err := r.Get(ctx, types.NamespacedName{Name: req.Name, Namespace: req.Namespace}, postgreWriterObj)
+
 	if err != nil {
 		if errors.IsNotFound(err) {
 			return ctrl.Result{}, nil
@@ -67,12 +78,35 @@ func (r *PostgresWriterReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return ctrl.Result{}, err
 	}
 
+	// no delete, add finalizers
+	if postgreWriterObj.GetDeletionTimestamp().IsZero() {
+		if !reflect.DeepEqual(postgreWriterObj.GetFinalizers(), finalizers) {
+			postgreWriterObj.SetFinalizers(finalizers)
+			if err := r.Update(ctx, postgreWriterObj); err != nil {
+				logger.Error(err, "error occurred while setting the finalizers of the PostgresWriter resource")
+				return ctrl.Result{}, err
+			}
+		}
+		if err := r.InsertOrUpdatePostgres(postgreWriterObj); err != nil {
+			return ctrl.Result{}, err
+		}
+	}
+
+	// delete
+	if !postgreWriterObj.GetDeletionTimestamp().IsZero() {
+		r.DeletePostgres(ctx, postgreWriterObj)
+	}
+
+	return ctrl.Result{}, nil
+}
+
+func (r *PostgresWriterReconciler) InsertOrUpdatePostgres(postgreWriterObj *dbv1.PostgresWriter) error {
 	// parsing the table, name, age, country fields from the spec of the incoming postgres-writer resource
 	id, name, age, department := postgreWriterObj.Spec.Id, postgreWriterObj.Spec.Name, postgreWriterObj.Spec.Age, postgreWriterObj.Spec.Department
 
 	// forming a unique id corresponding to the incoming resource
 	crdid := postgreWriterObj.Namespace + "/" + postgreWriterObj.Name
-	logger.Info(fmt.Sprintf("Writing id: %+v, name: %+v, age: %+v, department: %+v, into table Student", id, name, age, department))
+	logger.Info(fmt.Sprintf("InsertOrUpdatePostgres id: %+v, name: %+v, age: %+v, department: %+v, into table Student", id, name, age, department))
 	// performing the `INSERT` to the DB with the provided name, age, country on the provided table
 	student := &model.Student{
 		Id:         id,
@@ -81,16 +115,31 @@ func (r *PostgresWriterReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		Department: crdid,
 	}
 	std := &model.Student{}
-	if err = std.Insert(student); err != nil {
+	if err := std.Insert(student); err != nil {
 		logger.Error(err, "error occurred while inserting the row in the Postgres DB")
-		return ctrl.Result{}, err
+		return err
 	}
-	return ctrl.Result{}, nil
+	return nil
+}
+
+func (r *PostgresWriterReconciler) DeletePostgres(ctx context.Context, postgreWriterObj *dbv1.PostgresWriter) error {
+	// parse the id of the row to delete
+	id := postgreWriterObj.Spec.Id
+	std := &model.Student{}
+	if err := std.Delete(id); err != nil {
+		return fmt.Errorf("error occurred while running the DELETE query on Postgres: %w", err)
+	}
+
+	// remove the cleanup-row finalizer from the postgresWriterObject
+	controllerutil.RemoveFinalizer(postgreWriterObj, finalizers[0])
+	if err := r.Update(ctx, postgreWriterObj); err != nil {
+		return fmt.Errorf("error occurred while running the DELETE query on Postgres: %w", err)
+	}
+	logger.Info("cleaned up the 'finalizers.postgreswriters.demo.yash.com/cleanup-row' finalizer successfully")
+	return nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *PostgresWriterReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewControllerManagedBy(mgr).
-		For(&dbv1.PostgresWriter{}).
-		Complete(r)
+	return ctrl.NewControllerManagedBy(mgr).For(&dbv1.PostgresWriter{}).Complete(r)
 }
