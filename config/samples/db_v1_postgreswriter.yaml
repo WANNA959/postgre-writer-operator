@@ -1,0 +1,10 @@
+apiVersion: db.godx.com/v1
+kind: PostgresWriter
+metadata:
+  name: postgreswriter-sample
+  namespace: postgre-ns
+spec:
+  id: 1
+  name: wanna
+  age: 23
+  department: iscas

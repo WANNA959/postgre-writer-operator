@@ -1,0 +1,33 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  creationTimestamp: null
+  name: manager-role
+rules:
+- apiGroups:
+  - db.godx.com
+  resources:
+  - postgreswriters
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - db.godx.com
+  resources:
+  - postgreswriters/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - db.godx.com
+  resources:
+  - postgreswriters/status
+  verbs:
+  - get
+  - patch
+  - update
