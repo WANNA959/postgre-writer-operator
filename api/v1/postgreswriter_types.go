@@ -61,6 +61,8 @@ type PostgresWriterStatus struct {
 // +kubebuilder:printcolumn:name="Ages",type="integer",JSONPath=".spec.age",description="age of item"
 // +kubebuilder:printcolumn:name="Department",type="string",JSONPath=".spec.department",description="department of item"
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp",description="create time of crd"
+// todo 添加shortname
+// +kubebuilder:resource:shortName=pw
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
 
