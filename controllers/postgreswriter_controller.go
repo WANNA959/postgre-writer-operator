@@ -67,11 +67,16 @@ func (r *PostgresWriterReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	// TODO(user): your logic here
 
 	// parsing the incoming postgres-writer resource
+	// 注意：Controller 逻辑是会在 CRD 状态变化的时候回调这个方法,此处需要自己判断这个事件是create/update/delete
+	// 需要注意的是，如果没有其他辅助方式，你很难知道 CRD 是新建还是更新了
+	// 但是，CRD 都对应着一个资源的状态，你只需要判断 CRD 的对象和资源的状态是否一致即可，至于是新建和更新，大多数情况都不是那么重要。
 	postgreWriterObj := &dbv1.PostgresWriter{}
 	err := r.Get(ctx, types.NamespacedName{Name: req.Name, Namespace: req.Namespace}, postgreWriterObj)
 
 	if err != nil {
 		if errors.IsNotFound(err) {
+			// delete事件
+			logger.Info("%s/$s has been delete", req.Namespace, req.Name)
 			return ctrl.Result{}, nil
 		}
 		logger.Error(err, "Error occurred while fetching the PostgresWriter resource")
