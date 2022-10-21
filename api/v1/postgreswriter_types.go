@@ -55,6 +55,12 @@ type PostgresWriterStatus struct {
 	// Important: Run "make" to regenerate code after modifying this file
 }
 
+// todo 添加get 信息
+// +kubebuilder:printcolumn:name="Id",type="integer",JSONPath=".spec.id",description="id of item"
+// +kubebuilder:printcolumn:name="Names",type="string",JSONPath=".spec.name",description="name of item"
+// +kubebuilder:printcolumn:name="Ages",type="integer",JSONPath=".spec.age",description="age of item"
+// +kubebuilder:printcolumn:name="Department",type="string",JSONPath=".spec.department",description="department of item"
+// +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp",description="create time of crd"
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
 
